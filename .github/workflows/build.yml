@@ -1,0 +1,80 @@
+name: Build VST3 Plugin
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Download JUCE
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/juce-framework/JUCE/releases/download/8.0.4/juce-8.0.4-windows.zip" -OutFile "juce.zip"
+          Expand-Archive -Path "juce.zip" -DestinationPath "."
+          Rename-Item -Path "JUCE" -NewName "juce"
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Generate Visual Studio Project with Projucer
+        run: |
+          .\juce\Projucer.exe --resave DomeLiveSimulator.jucer
+
+      - name: Build VST3 (Release)
+        run: |
+          msbuild Builds\VisualStudio2022\DomeLiveSimulator.sln /p:Configuration=Release /p:Platform=x64
+
+      - name: Upload VST3 Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DomeLiveSimulator-VST3-Windows
+          path: Builds/VisualStudio2022/x64/Release/VST3/DomeLiveSimulator.vst3/
+          retention-days: 30
+
+  release:
+    needs: build-windows
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: DomeLiveSimulator-VST3-Windows
+          path: DomeLiveSimulator.vst3
+
+      - name: Create ZIP
+        run: |
+          zip -r DomeLiveSimulator-VST3-Windows.zip DomeLiveSimulator.vst3
+
+      - name: Get current date
+        id: date
+        run: echo "date=$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v1.0.0-${{ steps.date.outputs.date }}
+          name: DomeLiveSimulator v1.0.0
+          body: |
+            ## Dome Live Simulator VST3
+
+            東京ドームのようなアリーナ音響をエミュレートするVST3プラグイン
+
+            ### インストール方法
+            1. ZIPを解凍
+            2. `DomeLiveSimulator.vst3` フォルダを `C:\Program Files\Common Files\VST3\` にコピー
+            3. DAWでプラグインをスキャン
+          files: DomeLiveSimulator-VST3-Windows.zip
+          draft: false
+          prerelease: false

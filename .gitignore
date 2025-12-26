@@ -1,0 +1,22 @@
+# Build outputs
+Builds/
+build/
+JuceLibraryCode/
+
+# IDE files
+.vs/
+*.vcxproj.user
+*.suo
+*.user
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+*.pdb
+
+# Temporary files
+*.tmp
+*.temp
+*.log
