@@ -17,22 +17,51 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Download JUCE
+      - name: Download and extract JUCE
+        shell: pwsh
         run: |
+          Write-Host "Downloading JUCE..."
           Invoke-WebRequest -Uri "https://github.com/juce-framework/JUCE/releases/download/8.0.4/juce-8.0.4-windows.zip" -OutFile "juce.zip"
-          Expand-Archive -Path "juce.zip" -DestinationPath "."
-          Rename-Item -Path "JUCE" -NewName "juce"
+          Write-Host "Extracting JUCE..."
+          Expand-Archive -Path "juce.zip" -DestinationPath "C:\"
+          Write-Host "JUCE extracted to C:\JUCE"
+          Get-ChildItem "C:\JUCE" | Select-Object Name
+
+      - name: Update .jucer file paths
+        shell: pwsh
+        run: |
+          $content = Get-Content "DomeLiveSimulator.jucer" -Raw
+          Write-Host "Jucer file loaded"
+          Set-Content "DomeLiveSimulator.jucer" -Value $content
+
+      - name: Generate Visual Studio Project with Projucer
+        shell: pwsh
+        run: |
+          Write-Host "Running Projucer..."
+          & "C:\JUCE\Projucer.exe" --resave "DomeLiveSimulator.jucer"
+          Start-Sleep -Seconds 5
+          Write-Host "Checking Builds folder..."
+          if (Test-Path "Builds\VisualStudio2022") {
+            Get-ChildItem "Builds\VisualStudio2022" | Select-Object Name
+          } else {
+            Write-Host "Builds folder not found, listing current directory..."
+            Get-ChildItem | Select-Object Name
+          }
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Generate Visual Studio Project with Projucer
-        run: |
-          .\juce\Projucer.exe --resave DomeLiveSimulator.jucer
-
       - name: Build VST3 (Release)
+        shell: pwsh
         run: |
-          msbuild Builds\VisualStudio2022\DomeLiveSimulator.sln /p:Configuration=Release /p:Platform=x64
+          Write-Host "Building VST3..."
+          msbuild "Builds\VisualStudio2022\DomeLiveSimulator.sln" /p:Configuration=Release /p:Platform=x64 /m
+
+      - name: List build output
+        shell: pwsh
+        run: |
+          Write-Host "Checking build output..."
+          Get-ChildItem -Path "Builds\VisualStudio2022\x64\Release" -Recurse | Select-Object FullName
 
       - name: Upload VST3 Artifact
         uses: actions/upload-artifact@v4
