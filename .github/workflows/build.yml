@@ -14,8 +14,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Download and extract JUCE
         shell: pwsh
@@ -23,68 +21,32 @@ jobs:
           Write-Host "Downloading JUCE..."
           Invoke-WebRequest -Uri "https://github.com/juce-framework/JUCE/releases/download/8.0.4/juce-8.0.4-windows.zip" -OutFile "juce.zip"
           Write-Host "Extracting JUCE..."
-          Expand-Archive -Path "juce.zip" -DestinationPath "C:\"
-          Write-Host "JUCE extracted. Checking contents..."
-          Get-ChildItem "C:\JUCE" | Select-Object Name
-          Get-ChildItem "C:\JUCE\modules" -Directory | Select-Object Name -First 5
+          Expand-Archive -Path "juce.zip" -DestinationPath "."
+          Write-Host "JUCE extracted to ./JUCE"
+          Get-ChildItem "JUCE" | Select-Object Name
 
-      - name: Update jucer file module paths
+      - name: Configure CMake
         shell: pwsh
         run: |
-          Write-Host "Updating .jucer file module paths..."
-          $content = Get-Content "DomeLiveSimulator.jucer" -Raw
-          # 既存のパスをCI環境用に更新
-          $content = $content -replace 'path="C:/JUCE/modules"', 'path="C:/JUCE/modules"'
-          $content = $content -replace 'path="C:\\JUCE\\modules"', 'path="C:/JUCE/modules"'
-          Set-Content "DomeLiveSimulator.jucer" -Value $content
-          Write-Host "Updated .jucer file"
-
-      - name: Generate Visual Studio Project with Projucer
-        shell: pwsh
-        run: |
-          Write-Host "Running Projucer to generate VS project..."
-          $projucerPath = "C:\JUCE\Projucer.exe"
-          if (Test-Path $projucerPath) {
-            Write-Host "Projucer found at $projucerPath"
-            & $projucerPath --resave "$PWD\DomeLiveSimulator.jucer"
-            Write-Host "Projucer finished. Exit code: $LASTEXITCODE"
-          } else {
-            Write-Host "ERROR: Projucer not found at $projucerPath"
-            Get-ChildItem "C:\JUCE" -Recurse -Filter "*.exe" | Select-Object FullName
-            exit 1
-          }
-
-          # Projucerが生成したファイルを確認
-          Start-Sleep -Seconds 3
-          Write-Host "Checking for generated files..."
-          Get-ChildItem -Recurse -Depth 2 | Where-Object { $_.Name -like "*.sln" -or $_.Name -like "*.vcxproj" } | Select-Object FullName
-
-      - name: Verify Builds folder exists
-        shell: pwsh
-        run: |
-          if (Test-Path "Builds\VisualStudio2022\DomeLiveSimulator.sln") {
-            Write-Host "SUCCESS: Solution file found!"
-          } else {
-            Write-Host "ERROR: Solution file not found!"
-            Write-Host "Current directory contents:"
-            Get-ChildItem -Recurse -Depth 3 | Select-Object FullName
-            exit 1
-          }
-
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
+          cmake -B build -S . -G "Visual Studio 17 2022" -A x64
 
       - name: Build VST3 (Release)
         shell: pwsh
         run: |
-          Write-Host "Building VST3..."
-          msbuild "Builds\VisualStudio2022\DomeLiveSimulator.sln" /p:Configuration=Release /p:Platform=x64 /m
+          cmake --build build --config Release --parallel
+
+      - name: List build outputs
+        shell: pwsh
+        run: |
+          Write-Host "Searching for VST3 files..."
+          Get-ChildItem -Path "build" -Recurse -Filter "*.vst3" -Directory | Select-Object FullName
+          Get-ChildItem -Path "build" -Recurse | Where-Object { $_.FullName -like "*VST3*" } | Select-Object FullName
 
       - name: Upload VST3 Artifact
         uses: actions/upload-artifact@v4
         with:
           name: DomeLiveSimulator-VST3-Windows
-          path: Builds/VisualStudio2022/x64/Release/VST3/DomeLiveSimulator.vst3/
+          path: build/DomeLiveSimulator_artefacts/Release/VST3/
           retention-days: 30
 
   release:
@@ -97,10 +59,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: DomeLiveSimulator-VST3-Windows
-          path: DomeLiveSimulator.vst3
+          path: DomeLiveSimulator-VST3
 
       - name: Create ZIP
-        run: zip -r DomeLiveSimulator-VST3-Windows.zip DomeLiveSimulator.vst3
+        run: zip -r DomeLiveSimulator-VST3-Windows.zip DomeLiveSimulator-VST3
 
       - name: Get current date
         id: date

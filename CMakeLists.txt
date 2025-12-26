@@ -7,8 +7,21 @@ project(DomeLiveSimulator VERSION 1.0.0)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# JUCE_PATH環境変数またはデフォルトパスを使用
+if(DEFINED ENV{JUCE_PATH})
+    set(JUCE_DIR $ENV{JUCE_PATH})
+elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/JUCE")
+    set(JUCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/JUCE")
+elseif(EXISTS "C:/JUCE")
+    set(JUCE_DIR "C:/JUCE")
+else()
+    message(FATAL_ERROR "JUCE not found! Set JUCE_PATH environment variable or place JUCE in the project directory.")
+endif()
+
+message(STATUS "Using JUCE from: ${JUCE_DIR}")
+
 # JUCEをサブディレクトリとして追加
-add_subdirectory(C:/JUCE ${CMAKE_BINARY_DIR}/JUCE)
+add_subdirectory(${JUCE_DIR} ${CMAKE_BINARY_DIR}/JUCE)
 
 # オーディオプラグインの定義
 juce_add_plugin(DomeLiveSimulator
@@ -19,7 +32,7 @@ juce_add_plugin(DomeLiveSimulator
     NEEDS_MIDI_OUTPUT FALSE
     IS_MIDI_EFFECT FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
-    COPY_PLUGIN_AFTER_BUILD TRUE
+    COPY_PLUGIN_AFTER_BUILD FALSE
     PLUGIN_MANUFACTURER_CODE Dome
     PLUGIN_CODE Dlsm
     FORMATS VST3 Standalone
